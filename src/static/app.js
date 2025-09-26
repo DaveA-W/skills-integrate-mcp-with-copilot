@@ -1,20 +1,32 @@
 document.addEventListener("DOMContentLoaded", () => {
   const activitiesList = document.getElementById("activities-list");
   const activitySelect = document.getElementById("activity");
+  const categoryFilter = document.getElementById("category-filter");
+  const sortFilter = document.getElementById("sort-filter");
+  const searchInput = document.getElementById("search-input");
+  const availableOnlyCheckbox = document.getElementById("available-only");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  let cachedActivities = {};
 
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
       const response = await fetch("/activities");
       const activities = await response.json();
+      cachedActivities = activities;
 
       // Clear loading message
       activitiesList.innerHTML = "";
 
+      // Populate category filter
+      populateCategoryFilter(activities);
+
       // Populate activities list
-      Object.entries(activities).forEach(([name, details]) => {
+      const entries = Object.entries(activities);
+      const filteredSorted = applyFiltersAndSort(entries);
+
+      filteredSorted.forEach(([name, details]) => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
 
@@ -60,11 +72,113 @@ document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll(".delete-btn").forEach((button) => {
         button.addEventListener("click", handleUnregister);
       });
+      // wire up filters
+      [categoryFilter, sortFilter, searchInput, availableOnlyCheckbox].forEach((el) => {
+        el.addEventListener("change", () => renderFromCache());
+        el.addEventListener("input", () => renderFromCache());
+      });
     } catch (error) {
       activitiesList.innerHTML =
         "<p>Failed to load activities. Please try again later.</p>";
       console.error("Error fetching activities:", error);
     }
+  }
+
+  function populateCategoryFilter(activities) {
+    const categories = new Set();
+    Object.values(activities).forEach((a) => {
+      if (a.category) categories.add(a.category);
+    });
+
+    // Clear existing options except 'All'
+    categoryFilter.innerHTML = '<option value="">All</option>';
+    Array.from(categories)
+      .sort()
+      .forEach((cat) => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        categoryFilter.appendChild(opt);
+      });
+  }
+
+  function applyFiltersAndSort(entries) {
+    // entries: array of [name, details]
+    const search = searchInput.value.trim().toLowerCase();
+    const category = categoryFilter.value;
+    const availableOnly = availableOnlyCheckbox.checked;
+    // filter
+    let filtered = entries.filter(([name, details]) => {
+      if (category && details.category !== category) return false;
+      if (availableOnly) {
+        const spotsLeft = details.max_participants - details.participants.length;
+        if (spotsLeft <= 0) return false;
+      }
+      if (search) {
+        const hay = `${name} ${details.description} ${details.schedule} ${details.category || ''}`.toLowerCase();
+        return hay.includes(search);
+      }
+      return true;
+    });
+
+    // sort
+    const sort = sortFilter.value;
+    if (sort === "name-asc") {
+      filtered.sort((a, b) => a[0].localeCompare(b[0]));
+    } else if (sort === "name-desc") {
+      filtered.sort((a, b) => b[0].localeCompare(a[0]));
+    } else if (sort === "availability") {
+      filtered.sort((a, b) => {
+        const aSpots = a[1].max_participants - a[1].participants.length;
+        const bSpots = b[1].max_participants - b[1].participants.length;
+        return bSpots - aSpots;
+      });
+    }
+
+    return filtered;
+  }
+
+  function renderFromCache() {
+    if (!cachedActivities) return;
+    activitiesList.innerHTML = "";
+    const entries = Object.entries(cachedActivities);
+    const filteredSorted = applyFiltersAndSort(entries);
+    filteredSorted.forEach(([name, details]) => {
+      const activityCard = document.createElement("div");
+      activityCard.className = "activity-card";
+      const spotsLeft = details.max_participants - details.participants.length;
+      const participantsHTML =
+        details.participants.length > 0
+          ? `<div class="participants-section">
+              <h5>Participants:</h5>
+              <ul class="participants-list">
+                ${details.participants
+                  .map(
+                    (email) =>
+                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                  )
+                  .join("")}
+              </ul>
+            </div>`
+          : `<p><em>No participants yet</em></p>`;
+
+      activityCard.innerHTML = `
+          <h4>${name}</h4>
+          <p>${details.description}</p>
+          <p><strong>Schedule:</strong> ${details.schedule}</p>
+          <p><strong>Category:</strong> ${details.category || '—'}</p>
+          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <div class="participants-container">
+            ${participantsHTML}
+          </div>
+        `;
+      activitiesList.appendChild(activityCard);
+    });
+
+    // Reattach delete handlers
+    document.querySelectorAll(".delete-btn").forEach((button) => {
+      button.addEventListener("click", handleUnregister);
+    });
   }
 
   // Handle unregister functionality
