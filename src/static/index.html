@@ -15,6 +15,29 @@
     <main>
       <section id="activities-container">
         <h3>Available Activities</h3>
+
+        <div id="filters" class="form-group">
+          <label for="category-filter">Category</label>
+          <select id="category-filter">
+            <option value="">All</option>
+          </select>
+
+          <label for="sort-filter" style="margin-top:8px;">Sort by</label>
+          <select id="sort-filter">
+            <option value="name-asc">Name (A → Z)</option>
+            <option value="name-desc">Name (Z → A)</option>
+            <option value="availability">Availability (most spots)</option>
+          </select>
+
+          <label for="search-input" style="margin-top:8px;">Search</label>
+          <input id="search-input" type="search" placeholder="Search activities..." />
+
+          <label style="display:flex;align-items:center;margin-top:8px;">
+            <input id="available-only" type="checkbox" style="margin-right:8px;" />
+            Show only activities with availability
+          </label>
+        </div>
+
         <div id="activities-list">
           <!-- Activities will be loaded here -->
           <p>Loading activities...</p>
